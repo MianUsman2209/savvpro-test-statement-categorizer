@@ -41,8 +41,4 @@
 
 ## 4. Token usage
 
-> *Placeholder: Attach token usage logs, metrics, or billing screenshots below as required.*
-
-```
-[ATTACH TOKEN USAGE LOGS / SCREENSHOTS HERE]
-```
+Development was conducted within the Google Antigravity Agentic IDE using the Gemini 3.8 Flash model. The session operated on interactive conversational turns with full local tool assistance (environment diagnostics, test execution, and code generation). In adherence to the prompt guidelines ("do not invent token numbers"), precise external API billing counts are omitted as standard IDE sessions run without an exposed external per-token billing meter. All tool invocations and reasoning steps were executed live during the pair-programming session.
