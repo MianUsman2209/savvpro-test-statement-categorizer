@@ -1,13 +1,13 @@
 import csv
 import re
 from datetime import date, datetime
-
+from typing import Optional
 from app.models.transaction import RawTransaction, TransactionType
 
 
 class StatementParseError(Exception):
     """Custom exception raised when statement parsing fails."""
-    def __init__(self, message: str, line_number: int | None = None):
+    def __init__(self, message: str, line_number: Optional[int] = None):
         super().__init__(message)
         self.message = message
         self.line_number = line_number
@@ -100,13 +100,17 @@ class StatementParser:
                 "Could not find valid statement column headers. Expected columns for Date, Description, and Amount (or Debit/Credit)."
             )
 
-        # Step 3: Check whether dataset uses negative numbers for debits
+        # Step 3: Check whether dataset uses negative numbers for debits in Amount column
         has_negative_numbers = False
         if "amount" in col_map:
-            for line in lines[header_row_idx + 1 : header_row_idx + 30]:
-                if "-" in line or "(" in line:
-                    has_negative_numbers = True
-                    break
+            amt_idx = col_map["amount"]
+            sample_reader = csv.reader(lines[header_row_idx + 1 : header_row_idx + 35], delimiter=delimiter)
+            for r in sample_reader:
+                if len(r) > amt_idx:
+                    c_val = r[amt_idx].strip()
+                    if "-" in c_val or "(" in c_val or "DR" in c_val.upper():
+                        has_negative_numbers = True
+                        break
 
         # Step 4: Parse transaction rows
         transactions: list[RawTransaction] = []
@@ -150,7 +154,7 @@ class StatementParser:
     @classmethod
     def _find_header_and_delimiter(
         cls, lines: list[str]
-    ) -> tuple[int | None, dict[str, int] | None, str]:
+    ) -> tuple[Optional[int], Optional[dict[str, int]], str]:
         candidates = [",", ";", "\t", "|"]
         for idx, line in enumerate(lines[:15]):
             for delim in candidates:
@@ -162,12 +166,12 @@ class StatementParser:
         return None, None, ","
 
     @classmethod
-    def _match_columns(cls, tokens: list[str]) -> dict[str, int] | None:
-        date_idx: int | None = None
-        desc_idx: int | None = None
-        amount_idx: int | None = None
-        debit_idx: int | None = None
-        credit_idx: int | None = None
+    def _match_columns(cls, tokens: list[str]) -> Optional[dict[str, int]]:
+        date_idx: Optional[int] = None
+        desc_idx: Optional[int] = None
+        amount_idx: Optional[int] = None
+        debit_idx: Optional[int] = None
+        credit_idx: Optional[int] = None
 
         for idx, col in enumerate(tokens):
             norm_col = col.strip()
@@ -204,7 +208,7 @@ class StatementParser:
         col_map: dict[str, int],
         line_num: int,
         has_negative_numbers: bool,
-    ) -> RawTransaction | None:
+    ) -> Optional[RawTransaction]:
         max_idx = max(col_map.values())
         if len(row) <= max_idx:
             return None
@@ -299,11 +303,12 @@ class StatementParser:
         if is_explicit_debit:
             return amt, TransactionType.DEBIT
 
-        # In signed bank statements, positive is credit (deposit), negative is debit
+        # In signed bank statements (statements that contain explicit negative amounts for debits),
+        # an unsigned positive amount is CREDIT (incoming money/deposit).
         if has_negative_numbers:
             return amt, TransactionType.CREDIT
 
-        # In standard positive-only credit card statements, positive numbers are expenses (debit)
+        # In standard positive-only credit card statements, all listed purchase amounts are DEBIT (spending).
         return amt, TransactionType.DEBIT
 
     @classmethod
